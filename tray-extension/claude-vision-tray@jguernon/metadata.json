@@ -1,0 +1,10 @@
+{
+  "name": "Claude Vision — quotas",
+  "description": "Shows each Claude account's 7-day quota in the top bar, as published by the Claude Vision app (~/.cache/claude-vision/tray.json). Visible only while the app is open. Never calls any API and never reads any token.",
+  "uuid": "claude-vision-tray@jguernon",
+  "shell-version": [
+    "50"
+  ],
+  "version": 1,
+  "url": "https://github.com/jguernon/claude-vision"
+}

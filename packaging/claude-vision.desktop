@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Claude Vision
+GenericName=Claude session monitor
+GenericName[fr]=Moniteur de sessions Claude
+Comment=Live Claude Code sessions, agents, data flow and quotas (EGA palette)
+Comment[fr]=Sessions Claude Code, agents, flux et quotas en temps réel (palette EGA)
+Exec=@BIN@ --window
+Icon=claude-vision
+Terminal=false
+Categories=Development;Monitor;
+Keywords=claude;agents;sessions;quotas;ega;
+StartupWMClass=claude-vision
+StartupNotify=true

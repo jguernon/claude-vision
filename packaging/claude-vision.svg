@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect x="2" y="2" width="60" height="60" rx="10" fill="#000000" stroke="#555555" stroke-width="2"/>
+  <rect x="7" y="8" width="50" height="8" fill="#0000AA"/>
+  <rect x="9" y="9.5" width="2" height="5" fill="#FFFFFF"/>
+  <rect x="12" y="10.5" width="15" height="3" fill="#FFFF55"/>
+  <rect x="44" y="10.5" width="10" height="3" fill="#55FF55"/>
+  <rect x="7.5" y="19.5" width="49" height="37" fill="none" stroke="#AAAAAA" stroke-width="1.2"/>
+  <rect x="9.6" y="21.6" width="44.8" height="32.8" fill="none" stroke="#AAAAAA" stroke-width="1.2"/>
+  <circle cx="15" cy="27.5" r="2.2" fill="#55FF55"/>
+  <rect x="19.5" y="26" width="19" height="3" fill="#FFFFFF"/>
+  <rect x="41.5" y="26" width="9.5" height="3" fill="#00AAAA"/>
+  <rect x="13" y="33.5" width="11" height="2" fill="#55FFFF"/>
+  <polygon points="23.5,31.5 28,34.5 23.5,37.5" fill="#55FFFF"/>
+  <rect x="32" y="33" width="19" height="3" fill="#AA00AA"/>
+  <polygon points="13,41.5 17.5,38.5 17.5,44.5" fill="#FF55FF"/>
+  <rect x="17" y="40.5" width="11" height="2" fill="#FF55FF"/>
+  <rect x="32" y="40" width="19" height="3" fill="#00AA00"/>
+  <rect x="13" y="47.5" width="23" height="3" fill="#FFFF55"/>
+  <rect x="36" y="47.5" width="15" height="3" fill="#555555"/>
+</svg>

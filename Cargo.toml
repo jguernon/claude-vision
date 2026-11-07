@@ -1,0 +1,31 @@
+[package]
+name = "claude-vision"
+version = "0.1.0"
+edition = "2021"
+description = "Live EGA dashboard of Claude Code sessions, their agents, data flow and quotas"
+repository = "https://github.com/jguernon/claude-vision"
+homepage = "https://jonathanguernon.net/claude-vision/"
+readme = "README.md"
+keywords = ["claude", "claude-code", "dashboard", "tui", "ega"]
+categories = ["command-line-utilities", "visualization"]
+
+[dependencies]
+ratatui = "0.29"
+crossterm = "0.28"
+serde_json = "1"
+notify = "7"
+ureq = { version = "2", features = ["json"] }
+chrono = "0.4"
+anyhow = "1"
+memchr = "2"
+unicode-width = "0.2"
+winit = "0.30"
+softbuffer = "0.4"
+fontdue = "0.9"
+png = "0.17"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

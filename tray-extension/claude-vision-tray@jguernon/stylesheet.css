@@ -1,0 +1,11 @@
+/* Claude Vision — quotas : police à chasse fixe, comme l'écran EGA de l'app. */
+
+.claude-vision-tray-label {
+    font-family: monospace;
+    font-weight: normal;
+}
+
+.claude-vision-tray-menu-label {
+    font-family: monospace;
+    font-weight: normal;
+}
