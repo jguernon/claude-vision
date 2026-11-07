@@ -129,4 +129,4 @@ installing or updating it.
 
 ## License
 
-No license has been chosen yet: all rights reserved for now.
+[MIT](LICENSE) © 2026 Jonathan Guernon.

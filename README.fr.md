@@ -132,4 +132,4 @@ Wayland, il faut se déconnecter puis se reconnecter après l'avoir installée o
 
 ## Licence
 
-Aucune licence n'a encore été choisie : tous droits réservés pour l'instant.
+[MIT](LICENSE) © 2026 Jonathan Guernon.
