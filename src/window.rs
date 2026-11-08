@@ -52,7 +52,7 @@ impl ViewKind {
     fn base_px(self) -> f32 {
         match self {
             ViewKind::Main => 14.0,
-            ViewKind::Map => 12.0,
+            ViewKind::Map => 14.0,
         }
     }
     fn start_size(self) -> (u32, u32) {
@@ -195,7 +195,10 @@ impl Win {
     }
 
     fn open_view(&mut self, el: &ActiveEventLoop, kind: ViewKind) -> bool {
-        let zoom = load_zoom(kind).unwrap_or_else(|| kind.base_px());
+        // la carte reprend le zoom de la fenêtre principale tant qu'elle n'a pas le sien
+        let zoom = load_zoom(kind)
+            .or_else(|| if kind == ViewKind::Map { load_zoom(ViewKind::Main) } else { None })
+            .unwrap_or_else(|| kind.base_px());
         let mut raster = match Raster::new(zoom * self.scale as f32) {
             Ok(r) => r,
             Err(e) => {
@@ -208,13 +211,20 @@ impl Win {
         let ch = raster.ch as f64 / self.scale;
         let (c, r) = kind.start_size();
         let (mc, mr) = kind.min_size();
+        // Taille de départ en points : la carte garde sa taille d'écran habituelle (150 × 84
+        // cellules de 7 × 14), quel que soit le zoom ; elle montre simplement moins de colonnes
+        // avec de plus gros caractères.
+        let (start_w, start_h) = match kind {
+            ViewKind::Main => (c as f64 * cw + cw, r as f64 * ch + cw),
+            ViewKind::Map => (c as f64 * 7.0 + 7.0, r as f64 * 14.0 + 7.0),
+        };
         let title = match kind {
             ViewKind::Main => crate::profile::title(),
             ViewKind::Map => format!("{} — MAP", crate::profile::title()),
         };
         let mut attrs = Window::default_attributes()
             .with_title(title)
-            .with_inner_size(LogicalSize::new(c as f64 * cw + cw, r as f64 * ch + cw))
+            .with_inner_size(LogicalSize::new(start_w, start_h))
             .with_min_inner_size(LogicalSize::new(mc as f64 * cw + cw, mr as f64 * ch + cw));
         let app_id = crate::profile::app_id();
         attrs = winit::platform::wayland::WindowAttributesExtWayland::with_name(attrs, &app_id, "");
@@ -564,7 +574,7 @@ pub fn snapshot_map(engine: &Engine, path: &str, cols: u16, rows: u16) -> Result
     // une image prise au milieu du trajet des paquets
     let mut buf = Buffer::empty(area);
     map::draw(&mut buf, area, &engine.app, &mut ms, now + 450, engine.tick + 7);
-    render_png(&buf, path, ViewKind::Map.base_px())
+    render_png(&buf, path, 12.0)
 }
 
 #[cfg(test)]

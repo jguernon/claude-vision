@@ -77,7 +77,8 @@ cargo build --release          # binaire dans target/release/claude-vision
 La fenêtre est native (Wayland ou X11). Le texte vient de la police monospace, et les bordures
 doubles, blocs et trames ░▒▓ sont tracés pixel par pixel comme sur une carte EGA.
 `Ctrl +`, `Ctrl -` et `Ctrl 0` règlent la taille des caractères de la fenêtre active ; chaque
-fenêtre retient sa dernière taille (dans `~/.config/claude-vision/zoom`).
+fenêtre retient sa dernière taille (dans `~/.config/claude-vision/zoom`), et la carte reprend
+celle de la fenêtre principale tant qu'elle n'a pas la sienne.
 
 L'interface parle français et anglais. La langue vient de `--lang`, puis de
 `CLAUDE_VISION_LANG`, puis de `~/.config/claude-vision/lang`, puis de la langue du système.

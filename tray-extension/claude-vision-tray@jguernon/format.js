@@ -15,10 +15,15 @@ export const EGA = {
     BROWN: '#AA5500',
 };
 
-export const BAR_CELLS = 8;
+export const BAR_CELLS = 10; // 10 blocs : 10 % chacun
 export const FRESH_MS = 20000;
 
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+
+// GNOME Shell pose sa couleur de texte par défaut à partir du premier caractère :
+// un segment coloré qui commence lui aussi au premier caractère perd sa couleur
+// (le nom « Perso » restait blanc). Un espace de largeur nulle en tête évite ça.
+export const LEAD = '\u200B';
 
 function str(v) {
     return typeof v === 'string' ? v : null;
@@ -99,7 +104,8 @@ export function pctColor(pct) {
 
 export function fullCells(pct, cells = BAR_CELLS) {
     const p = Math.min(100, Math.max(0, pct));
-    return Math.round(p / 100 * cells);
+    // vers le bas : un bloc = une tranche complète de 10 %, la barre n'est pleine qu'à 100 %
+    return Math.floor(p / 100 * cells + 1e-9);
 }
 
 export function barMarkup(pct, cells = BAR_CELLS) {
@@ -116,11 +122,11 @@ function pctText(pct) {
     return `${Math.round(pct)}%`;
 }
 
-/** Ligne compacte du panneau : « Perso ▓▓▓▓▓▓░░ 73%  Work ▓░░░░░░░ 6% ». */
+/** Ligne compacte du panneau : « Perso ▓▓▓▓▓▓▓░░░ 73%  Work ▓░░░░░░░░░ 6% ». */
 export function panelMarkup(state) {
     if (!state.accounts.length)
-        return span('Claude —', EGA.LGRAY);
-    return state.accounts.map(a => {
+        return LEAD + span('Claude —', EGA.LGRAY);
+    return LEAD + state.accounts.map(a => {
         let s = span(a.short, a.color);
         if (a.pct === null)
             s += ` ${span('—', EGA.LGRAY)}`;
@@ -181,7 +187,7 @@ export function accountMenuMarkup(a, now = null, lang = 'en') {
     else
         s += `${barMarkup(a.pct)} ${span(pctText(a.pct).padStart(4), EGA.WHITE)}`;
     s += `  ${span('↻', EGA.DGRAY)} ${span(fmtReset(a.resetsAt, now, lang), EGA.LGRAY)}`;
-    return s;
+    return LEAD + s;
 }
 
 /** Ligne d'erreur d'un compte (null s'il n'y en a pas). */
@@ -191,7 +197,7 @@ export function accountErrorMarkup(a, lang = 'en') {
     let text = `⚠ ${a.error}`;
     if (a.fetchedAtMs !== null)
         text += ` · ${lang === 'fr' ? 'relevé' : 'as of'} ${hhmm(a.fetchedAtMs)}`;
-    return span(text, EGA.BROWN);
+    return LEAD + span(text, EGA.BROWN);
 }
 
 /** « 5 sessions · 2 actives » (null si l'app ne publie pas ces champs). */
@@ -204,5 +210,5 @@ export function sessionsMarkup(state) {
         const b = state.busy;
         text += ` · ${b} ${b > 1 && state.lang === 'fr' ? 'actives' : 'active'}`;
     }
-    return span(text, EGA.LGRAY);
+    return LEAD + span(text, EGA.LGRAY);
 }

@@ -75,7 +75,8 @@ cargo build --release          # binary in target/release/claude-vision
 The window is native (Wayland or X11). Text comes from the monospace font, while the double
 borders, blocks and ░▒▓ shades are drawn pixel by pixel like on an EGA card.
 `Ctrl +`, `Ctrl -` and `Ctrl 0` set the character size of the active window; each window
-remembers its last size (in `~/.config/claude-vision/zoom`).
+remembers its last size (in `~/.config/claude-vision/zoom`), and the map uses the main window's
+size until it gets its own.
 
 The interface speaks English and French. The language comes from `--lang`, then
 `CLAUDE_VISION_LANG`, then `~/.config/claude-vision/lang`, then the system locale. Press `l`

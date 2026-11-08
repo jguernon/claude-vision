@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 
 use crate::{
     accounts,
-    ega::{hex, ACCOUNT_COLORS},
+    ega::{hex, TRAY_COLORS},
     quota,
     state::App,
     util::now_ms,
@@ -134,7 +134,7 @@ impl Engine {
                 json!({
                     "label": a.label,
                     "short": a.label.strip_prefix("Claude ").unwrap_or(&a.label),
-                    "color": hex(ACCOUNT_COLORS[i % ACCOUNT_COLORS.len()]),
+                    "color": hex(TRAY_COLORS[i % TRAY_COLORS.len()]),
                     "tier": q.and_then(|q| q.tier.clone()).unwrap_or_else(|| a.tier.clone()),
                     "weekly_pct": weekly.map(|w| w.pct),
                     "weekly_resets_at": weekly.and_then(|w| w.resets_at).map(|d| d.to_rfc3339()),

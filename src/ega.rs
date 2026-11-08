@@ -21,6 +21,10 @@ pub const WHITE: Color = Color::Rgb(0xFF, 0xFF, 0xFF);
 /// Couleur attribuée à chaque compte, dans l'ordre de découverte.
 pub const ACCOUNT_COLORS: [Color; 6] = [LCYAN, LMAGENTA, LGREEN, YELLOW, LBLUE, LRED];
 
+/// Couleur de chaque compte dans la barre du haut de GNOME (indicateur du tray) :
+/// bleu pour le premier compte, rouge pour le deuxième, comme les bandeaux des deux apps.
+pub const TRAY_COLORS: [Color; 6] = [LBLUE, LRED, LGREEN, YELLOW, LCYAN, LMAGENTA];
+
 /// « #RRGGBB » d'une couleur de la palette.
 pub fn hex(c: Color) -> String {
     match c {
