@@ -40,8 +40,11 @@ Everything is read from disk, with no hooks and no configuration:
 - **Event flow**: each session's JSONL transcript in `<config>/projects/`, read incrementally
   (only new bytes are read, woken up by inotify), so even 100 MB transcripts cost nothing.
 - **Sub-agents**: the `subagents/` folder next to the transcript.
-- **Quotas**: Claude's OAuth usage endpoint, using the token already in `.credentials.json`
-  (read-only: the token is never rewritten or displayed). The endpoint is rate-limited, so it
+- **Quotas**: Claude's OAuth usage endpoint, using the token already in `.credentials.json`.
+  When that access token has expired (it lasts about 8 hours, and nobody renews it when Claude
+  Code only runs through Claude Desktop), Claude Vision renews it with the refresh token, like
+  Claude Code itself does, and writes it back to `.credentials.json` (private, mode 0600). The
+  token is never displayed and only goes to Anthropic. The endpoint is rate-limited, so it
   is polled every 5 minutes, backing off up to 30 minutes on HTTP 429. The last values are
   cached in `~/.cache/claude-vision/quotas.json` and stay on screen, with a note, while the
   API refuses.
@@ -71,7 +74,8 @@ cargo build --release          # binary in target/release/claude-vision
 
 The window is native (Wayland or X11). Text comes from the monospace font, while the double
 borders, blocks and ░▒▓ shades are drawn pixel by pixel like on an EGA card.
-`Ctrl +`, `Ctrl -` and `Ctrl 0` set the character size of the active window.
+`Ctrl +`, `Ctrl -` and `Ctrl 0` set the character size of the active window; each window
+remembers its last size (in `~/.config/claude-vision/zoom`).
 
 The interface speaks English and French. The language comes from `--lang`, then
 `CLAUDE_VISION_LANG`, then `~/.config/claude-vision/lang`, then the system locale. Press `l`

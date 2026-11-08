@@ -193,21 +193,110 @@ fn cache_put(cache: &mut Value, dir: &Path, at: i64, tier: Option<&str>, windows
     }
 }
 
-fn token(dir: &Path) -> Result<String, String> {
+// ── jeton OAuth ──────────────────────────────────────────────────────────
+//
+// Le jeton d'accès de `.credentials.json` expire après environ 8 h. Quand
+// Claude Code ne tourne qu'à travers Claude Desktop, personne ne réécrit ce
+// fichier : on rafraîchit alors le jeton comme le font Claude Code et
+// l'extension GNOME « claude-usage », puis on réécrit le fichier (privé, 0600).
+
+const TOKEN_URL: &str = "https://platform.claude.com/v1/oauth/token";
+/// Identifiant public de l'application OAuth « Claude Code ».
+const CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+/// On rafraîchit un peu avant l'expiration.
+const REFRESH_SKEW_MS: i64 = 5 * 60_000;
+const DEFAULT_EXPIRES_MS: i64 = 8 * 3_600_000;
+
+fn read_credentials(dir: &Path) -> Result<Value, String> {
     let txt = std::fs::read_to_string(dir.join(".credentials.json"))
         .map_err(|_| t("aucun jeton", "no token").to_string())?;
     let v: Value = serde_json::from_str(&txt).map_err(|_| t("jeton illisible", "unreadable token").to_string())?;
+    if v["claudeAiOauth"]["accessToken"].as_str().is_none() {
+        return Err(t("aucun jeton", "no token").to_string());
+    }
+    Ok(v)
+}
+
+/// Jeton encore valable (avec la marge), sinon `None`.
+fn fresh_token(v: &Value) -> Option<String> {
     let o = &v["claudeAiOauth"];
-    let tok = o["accessToken"]
+    let exp = o["expiresAt"].as_i64().unwrap_or(0);
+    if exp == 0 || exp - now_ms() > REFRESH_SKEW_MS {
+        o["accessToken"].as_str().map(|s| s.to_string())
+    } else {
+        None
+    }
+}
+
+/// Écrit le fichier d'identifiants de façon atomique, en mode 0600.
+fn write_credentials(dir: &Path, v: &Value) -> std::io::Result<()> {
+    use std::{io::Write, os::unix::fs::OpenOptionsExt};
+    let path = dir.join(".credentials.json");
+    let tmp = dir.join(".credentials.json.claude-vision.tmp");
+    let text = serde_json::to_string(v).map_err(std::io::Error::other)?;
+    {
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)?;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()?;
+    }
+    std::fs::rename(&tmp, &path)
+}
+
+fn refresh(agent: &ureq::Agent, dir: &Path, mut v: Value) -> Result<String, String> {
+    let rt = v["claudeAiOauth"]["refreshToken"]
         .as_str()
-        .ok_or_else(|| t("aucun jeton", "no token").to_string())?
+        .ok_or_else(|| t("jeton expiré, pas de jeton de rafraîchissement", "token expired, no refresh token").to_string())?
         .to_string();
-    if let Some(exp) = o["expiresAt"].as_i64() {
-        if exp < Utc::now().timestamp_millis() {
-            return Err(t("jeton expiré (relance claude)", "token expired (restart claude)").into());
+    let resp = agent
+        .post(TOKEN_URL)
+        .set("Accept", "application/json")
+        .set("User-Agent", concat!("claude-vision/", env!("CARGO_PKG_VERSION")))
+        .send_json(json!({ "grant_type": "refresh_token", "refresh_token": rt, "client_id": CLIENT_ID }));
+    let data: Value = match resp {
+        Ok(r) => r.into_json().map_err(|_| t("réponse illisible", "unreadable response").to_string())?,
+        Err(ureq::Error::Status(400 | 401, _)) => {
+            return Err(t(
+                "session expirée : reconnecte Claude Code (claude, puis /login)",
+                "session expired: sign in to Claude Code again (claude, then /login)",
+            )
+            .to_string())
+        }
+        Err(ureq::Error::Status(c, _)) => return Err(format!("HTTP {c}")),
+        Err(_) => return Err(t("réseau indisponible", "network unavailable").to_string()),
+    };
+    let access = data["access_token"]
+        .as_str()
+        .ok_or_else(|| t("réponse illisible", "unreadable response").to_string())?
+        .to_string();
+    let o = &mut v["claudeAiOauth"];
+    o["accessToken"] = json!(access);
+    if let Some(r) = data["refresh_token"].as_str() {
+        o["refreshToken"] = json!(r);
+    }
+    let lifetime = data["expires_in"].as_i64().map(|s| s * 1000).unwrap_or(DEFAULT_EXPIRES_MS);
+    o["expiresAt"] = json!(now_ms() + lifetime);
+    write_credentials(dir, &v).map_err(|_| t("écriture du jeton impossible", "cannot save the token").to_string())?;
+    Ok(access)
+}
+
+/// Jeton d'accès valable : celui du fichier, ou un nouveau obtenu par rafraîchissement.
+fn token(agent: &ureq::Agent, dir: &Path) -> Result<String, String> {
+    let v = read_credentials(dir)?;
+    if let Some(tok) = fresh_token(&v) {
+        return Ok(tok);
+    }
+    match refresh(agent, dir, v) {
+        Ok(tok) => Ok(tok),
+        Err(e) => {
+            // Claude Code ou l'extension GNOME a peut-être rafraîchi le fichier entre-temps.
+            read_credentials(dir).ok().and_then(|v| fresh_token(&v)).ok_or(e)
         }
     }
-    Ok(tok)
 }
 
 fn get(agent: &ureq::Agent, url: &str, token: &str) -> Result<Value, FetchErr> {
@@ -217,7 +306,7 @@ fn get(agent: &ureq::Agent, url: &str, token: &str) -> Result<Value, FetchErr> {
         .set("Authorization", &format!("Bearer {token}"))
         .set("anthropic-beta", BETA)
         .set("Accept", "application/json")
-        .set("User-Agent", "claude-vision/0.1")
+        .set("User-Agent", concat!("claude-vision/", env!("CARGO_PKG_VERSION")))
         .call()
     {
         Ok(r) => r.into_json::<Value>().map_err(|_| err(t("réponse illisible", "unreadable response"))),
@@ -234,12 +323,12 @@ fn get(agent: &ureq::Agent, url: &str, token: &str) -> Result<Value, FetchErr> {
 }
 
 fn fetch_usage(agent: &ureq::Agent, dir: &Path) -> Result<Vec<Window>, FetchErr> {
-    let t = token(dir).map_err(|msg| FetchErr { msg, retry_after_ms: None })?;
+    let t = token(agent, dir).map_err(|msg| FetchErr { msg, retry_after_ms: None })?;
     get(agent, USAGE_URL, &t).map(|v| parse_windows(&v))
 }
 
 fn fetch_tier(agent: &ureq::Agent, dir: &Path) -> Option<String> {
-    let t = token(dir).ok()?;
+    let t = token(agent, dir).ok()?;
     let v = get(agent, PROFILE_URL, &t).ok()?;
     let org = &v["organization"];
     Some(crate::accounts::tier_label(

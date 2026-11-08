@@ -169,7 +169,7 @@ fn header(cv: &mut Cv, app: &App) {
         (" ▌".into(), stb(WHITE, bg)),
         ("CLAUDE·VISION".into(), stb(YELLOW, bg)),
         ("▐ ".into(), stb(WHITE, bg)),
-        (format!("v0.1 · {n_acc} {}{}", t("compte", "account"), if n_acc > 1 { "s" } else { "" }), stb(LCYAN, bg)),
+        (format!("v{} · {n_acc} {}{}", env!("CARGO_PKG_VERSION"), t("compte", "account"), if n_acc > 1 { "s" } else { "" }), stb(LCYAN, bg)),
     ];
     cv.segs(0, 0, &left, w);
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();

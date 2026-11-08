@@ -41,6 +41,13 @@ enum ViewKind {
 }
 
 impl ViewKind {
+    /// Nom de la fenêtre dans le fichier des zooms mémorisés.
+    fn key(self) -> &'static str {
+        match self {
+            ViewKind::Main => "main",
+            ViewKind::Map => "map",
+        }
+    }
     /// Taille de police par défaut (Ctrl 0 y revient).
     fn base_px(self) -> f32 {
         match self {
@@ -60,6 +67,50 @@ impl ViewKind {
             ViewKind::Map => (map::MIN_W as u32, map::MIN_H as u32),
         }
     }
+}
+
+/// `~/.config/claude-vision/zoom` : une ligne « main 14 » / « map 12 » par fenêtre.
+fn zoom_path() -> Option<std::path::PathBuf> {
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))?;
+    Some(base.join("claude-vision").join("zoom"))
+}
+
+fn read_zooms() -> Vec<(String, f32)> {
+    zoom_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|t| {
+            t.lines()
+                .filter_map(|l| {
+                    let mut it = l.split_whitespace();
+                    Some((it.next()?.to_string(), it.next()?.parse::<f32>().ok()?))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Dernier zoom utilisé pour cette fenêtre, s'il a été mémorisé.
+fn load_zoom(kind: ViewKind) -> Option<f32> {
+    read_zooms()
+        .into_iter()
+        .find(|(k, _)| k == kind.key())
+        .map(|(_, z)| z.clamp(8.0, 40.0))
+}
+
+/// Mémorise le zoom de cette fenêtre (les autres lignes sont gardées).
+fn save_zoom(kind: ViewKind, zoom: f32) {
+    let Some(path) = zoom_path() else { return };
+    let mut all = read_zooms();
+    all.retain(|(k, _)| k != kind.key());
+    all.push((kind.key().to_string(), zoom));
+    all.sort_by(|a, b| a.0.cmp(&b.0));
+    let text: String = all.iter().map(|(k, z)| format!("{k} {z}\n")).collect();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(path, text);
 }
 
 #[derive(Default, Clone, Copy)]
@@ -144,7 +195,7 @@ impl Win {
     }
 
     fn open_view(&mut self, el: &ActiveEventLoop, kind: ViewKind) -> bool {
-        let zoom = kind.base_px();
+        let zoom = load_zoom(kind).unwrap_or_else(|| kind.base_px());
         let mut raster = match Raster::new(zoom * self.scale as f32) {
             Ok(r) => r,
             Err(e) => {
@@ -348,6 +399,7 @@ impl Win {
                     // le zoom ne touche que la fenêtre où la touche a été pressée
                     if let Some(v) = self.views.get_mut(i) {
                         v.zoom = if step == 0.0 { v.kind.base_px() } else { (v.zoom + step).clamp(8.0, 40.0) };
+                        save_zoom(v.kind, v.zoom);
                     }
                     self.apply_zoom(i);
                     return;
@@ -510,4 +562,25 @@ pub fn snapshot_map(engine: &Engine, path: &str, cols: u16, rows: u16) -> Result
     let mut buf = Buffer::empty(area);
     map::draw(&mut buf, area, &engine.app, &mut ms, now + 450, engine.tick + 7);
     render_png(&buf, path, ViewKind::Map.base_px())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zoom_is_remembered_per_window() {
+        let dir = std::env::temp_dir().join(format!("claude-vision-zoom-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        assert_eq!(load_zoom(ViewKind::Main), None);
+        save_zoom(ViewKind::Main, 13.0);
+        save_zoom(ViewKind::Map, 11.0);
+        save_zoom(ViewKind::Main, 15.0);
+        assert_eq!(load_zoom(ViewKind::Main), Some(15.0));
+        assert_eq!(load_zoom(ViewKind::Map), Some(11.0));
+        let text = std::fs::read_to_string(dir.join("claude-vision").join("zoom")).unwrap();
+        assert_eq!(text, "main 15\nmap 11\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

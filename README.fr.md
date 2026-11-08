@@ -42,7 +42,11 @@ Tout est lu sur le disque, sans hook ni configuration :
   transcript de 100 Mo ne coûte rien.
 - **Sous-agents** : le dossier `subagents/` à côté du transcript.
 - **Quotas** : l'endpoint OAuth d'usage de Claude, avec le jeton déjà présent dans
-  `.credentials.json` (lecture seule : le jeton n'est jamais réécrit ni affiché). L'endpoint
+  `.credentials.json`. Quand ce jeton d'accès est expiré (il dure environ 8 heures, et personne
+  ne le renouvelle quand Claude Code ne tourne qu'à travers Claude Desktop), Claude Vision le
+  renouvelle avec le jeton de rafraîchissement, comme Claude Code le fait, et le réécrit dans
+  `.credentials.json` (privé, mode 0600). Le jeton n'est jamais affiché et ne part que vers
+  Anthropic. L'endpoint
   limite les appels : il est interrogé toutes les 5 minutes, avec un recul progressif jusqu'à
   30 minutes en cas de refus (HTTP 429). Les dernières valeurs sont gardées dans
   `~/.cache/claude-vision/quotas.json` et restent affichées, avec une note, tant que l'API refuse.
@@ -72,7 +76,8 @@ cargo build --release          # binaire dans target/release/claude-vision
 
 La fenêtre est native (Wayland ou X11). Le texte vient de la police monospace, et les bordures
 doubles, blocs et trames ░▒▓ sont tracés pixel par pixel comme sur une carte EGA.
-`Ctrl +`, `Ctrl -` et `Ctrl 0` règlent la taille des caractères de la fenêtre active.
+`Ctrl +`, `Ctrl -` et `Ctrl 0` règlent la taille des caractères de la fenêtre active ; chaque
+fenêtre retient sa dernière taille (dans `~/.config/claude-vision/zoom`).
 
 L'interface parle français et anglais. La langue vient de `--lang`, puis de
 `CLAUDE_VISION_LANG`, puis de `~/.config/claude-vision/lang`, puis de la langue du système.
