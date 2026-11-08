@@ -162,15 +162,29 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, tick: u64) {
 
 fn header(cv: &mut Cv, app: &App) {
     let w = cv.w;
-    let bg = BLUE;
+    let bg = crate::profile::accent();
     cv.fill(0, 0, w, " ", stb(WHITE, bg), w);
     let n_acc = app.accounts.len();
-    let left: Vec<Seg> = vec![
+    let name = match crate::profile::badge() {
+        Some(b) => format!("CLAUDE·VISION {b}"),
+        None => "CLAUDE·VISION".to_string(),
+    };
+    let mut left: Vec<Seg> = vec![
         (" ▌".into(), stb(WHITE, bg)),
-        ("CLAUDE·VISION".into(), stb(YELLOW, bg)),
+        (name, stb(YELLOW, bg)),
         ("▐ ".into(), stb(WHITE, bg)),
-        (format!("v{} · {n_acc} {}{}", env!("CARGO_PKG_VERSION"), t("compte", "account"), if n_acc > 1 { "s" } else { "" }), stb(LCYAN, bg)),
+        (format!("v{} · ", env!("CARGO_PKG_VERSION")), stb(LCYAN, bg)),
     ];
+    // compte affiché : son nom dans sa couleur, ou « N comptes »
+    match app.account_filter {
+        Some(i) if i < n_acc => {
+            left.push((app.accounts[i].label.clone(), stb(ACCOUNT_COLORS[i % ACCOUNT_COLORS.len()], bg)));
+            if !app.account_locked && n_acc > 1 {
+                left.push((format!("  ({i_}/{n_acc} · Tab)", i_ = i + 1), stb(LGRAY, bg)));
+            }
+        }
+        _ => left.push((format!("{n_acc} {}{}", t("compte", "account"), if n_acc > 1 { "s" } else { "" }), stb(LCYAN, bg))),
+    }
     cv.segs(0, 0, &left, w);
     let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let n = app.sessions.len();
@@ -216,7 +230,7 @@ fn sessions_panel(cv: &mut Cv, app: &App, y0: u16, rows: u16, x0: u16, width: u1
     for (row, (i, s)) in app.sessions.iter().enumerate().skip(first).take(visible).enumerate() {
         let y = y0 + (row as u16) * 2;
         let sel = i == app.selected;
-        let bg = if sel { BLUE } else { BLACK };
+        let bg = if sel { crate::profile::accent() } else { BLACK };
         cv.fill(x0, y, width, " ", stb(LGRAY, bg), lim);
         cv.fill(x0, y + 1, width, " ", stb(LGRAY, bg), lim);
         let (puce, status, c) = if s.info.busy { ("●", "BUSY", LGREEN) } else { ("○", "IDLE", DGRAY) };
@@ -466,7 +480,8 @@ fn quotas_panel(cv: &mut Cv, app: &App, y0: u16, x0: u16, width: u16) {
     let lim = x0 + width;
     let bar_w = (width as usize).saturating_sub(58).clamp(10, 40);
     let mut y = y0;
-    for (i, acc) in app.accounts.iter().enumerate() {
+    for i in app.visible_accounts() {
+        let acc = &app.accounts[i];
         let color = ACCOUNT_COLORS[i % ACCOUNT_COLORS.len()];
         let q = app.quotas.get(i).and_then(|q| q.as_ref());
         let tier = q.and_then(|q| q.tier.clone()).unwrap_or_else(|| acc.tier.clone());
@@ -522,7 +537,7 @@ fn footer(cv: &mut Cv, app: &App, y: u16) {
     cv.put(w - 1, y, "╝", st(LGRAY), w);
     let keys = [
         ("q", t("quitter", "quit")),
-        ("↑↓", "session"),
+        ("Tab", if app.account_locked || app.accounts.len() < 2 { "" } else { t("compte", "account") }),
         ("⏎", t("détail", "details")),
         ("m", t("carte", "map")),
         ("a", if app.agents_all { t("agents: tous", "agents: all") } else { t("agents: sélection", "agents: selected") }),
@@ -533,7 +548,7 @@ fn footer(cv: &mut Cv, app: &App, y: u16) {
         ("l", t("EN", "FR")),
     ];
     let mut segs: Vec<Seg> = vec![seg("═ ", LGRAY)];
-    for (i, (k, lbl)) in keys.iter().enumerate() {
+    for (i, (k, lbl)) in keys.iter().filter(|(_, l)| !l.is_empty()).enumerate() {
         if i > 0 {
             segs.push(seg(" · ", DGRAY));
         }

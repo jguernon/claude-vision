@@ -95,6 +95,24 @@ to switch; the choice is remembered.
 | `p` | pause the flow |
 | `r` | refresh sessions and quotas |
 | `l` | switch between English and French |
+| `Tab` | switch account (each account in turn, then all of them) |
+
+### Several accounts and instances
+
+With several accounts, the window shows one account at a time (sessions, agents, flow and its
+own quota); `Tab` switches to the next one, then to all of them.
+
+You can also run a second copy of the app dedicated to one account, with its own app identity
+(so GNOME can put it on its own workspace) and its own banner color:
+
+```bash
+claude-vision --instance work --account work --accent red
+packaging/install-instance.sh work work red    # adds a "Claude Vision WORK" launcher and icon
+```
+
+`--account` keeps the account whose label or folder contains the given text. Instances share
+the quota cache, so running several of them does not multiply calls to the API. Only the main
+instance publishes the top bar indicator's data.
 
 ## Reading the screen
 

@@ -4,6 +4,7 @@ mod ega;
 mod i18n;
 mod engine;
 mod map;
+mod profile;
 mod quota;
 mod raster;
 mod sessions;
@@ -34,11 +35,16 @@ claude-vision : sessions Claude Code, agents, flux et quotas en temps réel (pal
   claude-vision --map          ouvre aussi la carte animée dès le lancement
   claude-vision --tui          affiche l'écran dans le terminal courant
   claude-vision --lang fr|en   choisit la langue (touche l pour basculer)
+  claude-vision --account SEL  n'affiche que ce compte (libellé ou dossier, ex. work)
+  claude-vision --instance N --accent red
+                               autre copie de l'app : identité « claude-vision-N »,
+                               titre « Claude Vision N », bandeau de la couleur choisie
   claude-vision --snapshot F   rend une image PNG de l'écran dans F (COLS LIGNES optionnels)
   claude-vision --snapshot-map F [COLS LIGNES] [--session ID]
                                rend une image PNG de la carte d'une session
 
-Dans la fenêtre : clic sur une session ou touche m pour ouvrir la carte animée.
+Dans la fenêtre : clic sur une session ou touche m pour ouvrir la carte animée,
+Tab pour passer d'un compte à l'autre.
 ";
 
 const HELP_EN: &str = "\
@@ -49,11 +55,16 @@ claude-vision: live Claude Code sessions, agents, data flow and quotas (EGA pale
   claude-vision --map          also opens the animated map at startup
   claude-vision --tui          draws the screen in the current terminal
   claude-vision --lang fr|en   picks the language (press l to switch)
+  claude-vision --account SEL  shows only this account (label or folder, e.g. work)
+  claude-vision --instance N --accent red
+                               another copy of the app: identity 'claude-vision-N',
+                               title 'Claude Vision N', banner in the chosen color
   claude-vision --snapshot F   renders a PNG of the screen to F (optional COLS ROWS)
   claude-vision --snapshot-map F [COLS ROWS] [--session ID]
                                renders a PNG of a session's map
 
-In the window: click a session or press m to open the animated map.
+In the window: click a session or press m to open the animated map,
+Tab to switch between accounts.
 ";
 
 const NO_CONFIG_FR: &str = "Aucun dossier de configuration Claude Code trouvé (~/.claude).";
@@ -64,6 +75,7 @@ fn main() -> Result<()> {
     let has = |f: &str| args.iter().any(|a| a == f);
     let lang_arg = args.iter().position(|a| a == "--lang").and_then(|i| args.get(i + 1)).cloned();
     i18n::init(lang_arg.as_deref());
+    profile::init(&args);
     if has("-h") || has("--help") {
         print!("{}", i18n::t(HELP_FR, HELP_EN));
         return Ok(());
@@ -103,13 +115,7 @@ fn main() -> Result<()> {
         // Lancement depuis un terminal ou un shell : la fenêtre vit seule.
         let exe = std::env::current_exe()?;
         let mut cmd = Command::new(exe);
-        cmd.arg("--window");
-        if has("--map") {
-            cmd.arg("--map");
-        }
-        if let Some(l) = &lang_arg {
-            cmd.args(["--lang", l]);
-        }
+        cmd.arg("--window").args(&args);
         cmd
             .stdin(Stdio::null())
             .stdout(Stdio::null())

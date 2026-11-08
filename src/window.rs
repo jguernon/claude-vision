@@ -31,7 +31,6 @@ use crate::{
     util::now_ms,
 };
 
-const APP_ID: &str = "claude-vision";
 const FRAME: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -41,12 +40,13 @@ enum ViewKind {
 }
 
 impl ViewKind {
-    /// Nom de la fenêtre dans le fichier des zooms mémorisés.
-    fn key(self) -> &'static str {
-        match self {
+    /// Nom de la fenêtre dans le fichier des zooms mémorisés (« main », « work.map »…).
+    fn key(self) -> String {
+        let k = match self {
             ViewKind::Main => "main",
             ViewKind::Map => "map",
-        }
+        };
+        format!("{}{k}", crate::profile::key_prefix())
     }
     /// Taille de police par défaut (Ctrl 0 y revient).
     fn base_px(self) -> f32 {
@@ -95,7 +95,7 @@ fn read_zooms() -> Vec<(String, f32)> {
 fn load_zoom(kind: ViewKind) -> Option<f32> {
     read_zooms()
         .into_iter()
-        .find(|(k, _)| k == kind.key())
+        .find(|(k, _)| *k == kind.key())
         .map(|(_, z)| z.clamp(8.0, 40.0))
 }
 
@@ -103,8 +103,8 @@ fn load_zoom(kind: ViewKind) -> Option<f32> {
 fn save_zoom(kind: ViewKind, zoom: f32) {
     let Some(path) = zoom_path() else { return };
     let mut all = read_zooms();
-    all.retain(|(k, _)| k != kind.key());
-    all.push((kind.key().to_string(), zoom));
+    all.retain(|(k, _)| *k != kind.key());
+    all.push((kind.key(), zoom));
     all.sort_by(|a, b| a.0.cmp(&b.0));
     let text: String = all.iter().map(|(k, z)| format!("{k} {z}\n")).collect();
     if let Some(dir) = path.parent() {
@@ -209,15 +209,16 @@ impl Win {
         let (c, r) = kind.start_size();
         let (mc, mr) = kind.min_size();
         let title = match kind {
-            ViewKind::Main => "Claude Vision",
-            ViewKind::Map => "Claude Vision — MAP",
+            ViewKind::Main => crate::profile::title(),
+            ViewKind::Map => format!("{} — MAP", crate::profile::title()),
         };
         let mut attrs = Window::default_attributes()
             .with_title(title)
             .with_inner_size(LogicalSize::new(c as f64 * cw + cw, r as f64 * ch + cw))
             .with_min_inner_size(LogicalSize::new(mc as f64 * cw + cw, mr as f64 * ch + cw));
-        attrs = winit::platform::wayland::WindowAttributesExtWayland::with_name(attrs, APP_ID, "");
-        attrs = winit::platform::x11::WindowAttributesExtX11::with_name(attrs, APP_ID, APP_ID);
+        let app_id = crate::profile::app_id();
+        attrs = winit::platform::wayland::WindowAttributesExtWayland::with_name(attrs, &app_id, "");
+        attrs = winit::platform::x11::WindowAttributesExtX11::with_name(attrs, &app_id, &app_id);
         let window = match el.create_window(attrs) {
             Ok(w) => Rc::new(w),
             Err(e) => {
@@ -331,15 +332,16 @@ impl Win {
         let app = &engine.app;
         let title = match v.kind {
             ViewKind::Main => format!(
-                "Claude Vision — {} session{} · {} active{}",
+                "{} — {} session{} · {} active{}",
+                crate::profile::title(),
                 app.sessions.len(),
                 if app.sessions.len() > 1 { "s" } else { "" },
                 app.busy_count(),
                 if app.busy_count() > 1 && fr() { "s" } else { "" }
             ),
             ViewKind::Map => match app.sessions.get(app.selected) {
-                Some(s) => format!("Claude Vision — MAP · {}", s.info.name),
-                None => "Claude Vision — MAP".to_string(),
+                Some(s) => format!("{} — MAP · {}", crate::profile::title(), s.info.name),
+                None => format!("{} — MAP", crate::profile::title()),
             },
         };
         if title != v.title {
@@ -411,6 +413,7 @@ impl Win {
             Key::Named(NamedKey::ArrowDown) => KeyCode::Down,
             Key::Named(NamedKey::Enter) => KeyCode::Enter,
             Key::Named(NamedKey::Escape) => KeyCode::Esc,
+            Key::Named(NamedKey::Tab) => KeyCode::Tab,
             Key::Character(s) => match s.as_str().to_lowercase().chars().next() {
                 Some(c) => KeyCode::Char(c),
                 None => return,

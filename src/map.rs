@@ -478,11 +478,11 @@ pub fn draw(buf: &mut Buffer, area: Rect, app: &App, ms: &mut MapState, now: i64
 
 fn header(cv: &mut Cv, s: Option<&SessionState>, now: i64) {
     let w = cv.w;
-    let bg = BLUE;
+    let bg = crate::profile::accent();
     cv.fill(0, 0, w, " ", stb(WHITE, bg), w);
     let mut left: Vec<Seg> = vec![
         (" ▌".into(), stb(WHITE, bg)),
-        ("MAP".into(), stb(YELLOW, bg)),
+        (crate::profile::badge().map(|b| format!("MAP {b}")).unwrap_or_else(|| "MAP".into()), stb(YELLOW, bg)),
         ("▐ ".into(), stb(WHITE, bg)),
     ];
     let mut right: Vec<Seg> = Vec::new();

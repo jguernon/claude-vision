@@ -140,6 +140,10 @@ impl Filter {
 
 pub struct App {
     pub flow_seq: u64,
+    /// compte affiché (None : tous)
+    pub account_filter: Option<usize>,
+    /// vrai si --account impose le compte (pas de bascule)
+    pub account_locked: bool,
     pub accounts: Vec<Account>,
     pub sessions: Vec<SessionState>,
     pub flow: VecDeque<FlowEntry>,
@@ -161,6 +165,8 @@ impl App {
         let n = accounts.len();
         let mut app = App {
             flow_seq: 0,
+            account_filter: None,
+            account_locked: false,
             accounts,
             sessions: Vec::new(),
             flow: VecDeque::new(),
@@ -218,12 +224,12 @@ impl App {
 
     /// Lignes du panneau QUOTAS : une par fenêtre de quota, plus une ligne vide entre deux comptes.
     pub fn quota_rows(&self) -> u16 {
-        let lines = self
-            .quotas
+        let shown = self.visible_accounts();
+        let lines = shown
             .iter()
-            .map(|q| q.as_ref().map(|q| q.windows.len().max(1)).unwrap_or(1) as u16)
+            .map(|&i| self.quotas.get(i).and_then(|q| q.as_ref()).map(|q| q.windows.len().max(1)).unwrap_or(1) as u16)
             .sum::<u16>();
-        (lines + self.quotas.len().saturating_sub(1) as u16).max(1)
+        (lines + shown.len().saturating_sub(1) as u16).max(1)
     }
 
     /// Dernières entrées du flux visibles selon le filtre, la pause et la sélection.
@@ -266,6 +272,7 @@ impl App {
             KeyCode::Char('a') => self.agents_all = !self.agents_all,
             KeyCode::Char('f') => self.filter = self.filter.next(),
             KeyCode::Char('l') => crate::i18n::toggle(),
+            KeyCode::Tab => self.cycle_account(),
             KeyCode::Char('s') => self.only_selected = !self.only_selected,
             KeyCode::Char('p') => {
                 self.paused = !self.paused;
@@ -317,8 +324,39 @@ impl App {
 
     // ── sessions ──────────────────────────────────────────────────────────
 
+    /// Comptes affichés (tous, ou seulement le compte actif).
+    pub fn visible_accounts(&self) -> Vec<usize> {
+        match self.account_filter {
+            Some(i) if i < self.accounts.len() => vec![i],
+            _ => (0..self.accounts.len()).collect(),
+        }
+    }
+
+    /// Tab : compte suivant, puis « tous », puis le premier.
+    pub fn cycle_account(&mut self) {
+        let n = self.accounts.len();
+        if self.account_locked || n < 2 {
+            return;
+        }
+        self.account_filter = match self.account_filter {
+            Some(i) if i + 1 < n => Some(i + 1),
+            Some(_) => None,
+            None => Some(0),
+        };
+        self.sessions.clear();
+        self.flow.clear();
+        self.selected = 0;
+        self.pause_len = 0;
+        self.show_detail = false;
+        self.rescan_sessions();
+    }
+
     pub fn rescan_sessions(&mut self) {
-        let found = sessions::scan(&self.accounts);
+        let filter = self.account_filter;
+        let found: Vec<SessionInfo> = sessions::scan(&self.accounts)
+            .into_iter()
+            .filter(|f| filter.map_or(true, |a| f.account == a))
+            .collect();
         let now = now_ms();
         // sessions terminées
         let mut i = 0;

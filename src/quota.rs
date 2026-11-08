@@ -54,77 +54,91 @@ struct FetchErr {
     retry_after_ms: Option<i64>,
 }
 
-pub fn spawn(dirs: Vec<PathBuf>, tx: Sender<QuotaResult>, refresh: Arc<AtomicBool>) {
+/// `targets` : (index du compte dans l'application, dossier de configuration).
+pub fn spawn(targets: Vec<(usize, PathBuf)>, tx: Sender<QuotaResult>, refresh: Arc<AtomicBool>) {
     thread::spawn(move || {
         let agent = ureq::AgentBuilder::new()
             .timeout(Duration::from_secs(20))
             .build();
-        let n = dirs.len();
-        let mut cache = load_cache();
+        let n = targets.len();
         let mut next = vec![0i64; n];
         let mut backoff = vec![0i64; n];
         let mut last_try = vec![0i64; n];
+        let mut seen_at = vec![0i64; n];
         let mut tiers: Vec<Option<String>> = vec![None; n];
         let mut profile_at = vec![0i64; n];
-        for (i, d) in dirs.iter().enumerate() {
-            if let Some((at, tier, windows)) = cache_get(&cache, d) {
-                tiers[i] = tier.clone();
-                profile_at[i] = at;
-                next[i] = at + POLL_MS;
-                last_try[i] = at;
-                let _ = tx.send(QuotaResult {
-                    account: i,
-                    windows,
-                    tier,
-                    error: None,
-                    fetched_at_ms: at,
-                    retry_at_ms: None,
-                });
-            }
-        }
         loop {
             let now = now_ms();
             let manual = refresh.swap(false, Ordering::SeqCst);
-            for i in 0..n {
-                let due = now >= next[i] || (manual && now - last_try[i] >= MANUAL_MIN_MS);
+            // Une autre instance (ou un lancement précédent) a peut-être déjà relevé
+            // ces quotas : on reprend ses valeurs au lieu de rappeler l'API.
+            let disk = load_cache();
+            for (k, (ai, dir)) in targets.iter().enumerate() {
+                if let Some((at, tier, windows)) = cache_get(&disk, dir) {
+                    if at > seen_at[k] && (now - at < POLL_MS || seen_at[k] == 0) {
+                        seen_at[k] = at;
+                        if tier.is_some() {
+                            tiers[k] = tier.clone();
+                            profile_at[k] = profile_at[k].max(at);
+                        }
+                        if now - at < POLL_MS {
+                            next[k] = next[k].max(at + POLL_MS);
+                        }
+                        last_try[k] = last_try[k].max(at);
+                        let _ = tx.send(QuotaResult {
+                            account: *ai,
+                            windows,
+                            tier,
+                            error: None,
+                            fetched_at_ms: at,
+                            retry_at_ms: None,
+                        });
+                    }
+                }
+            }
+            for (k, (ai, dir)) in targets.iter().enumerate() {
+                let due = now >= next[k] || (manual && now - last_try[k] >= MANUAL_MIN_MS);
                 if !due {
                     continue;
                 }
-                last_try[i] = now;
-                match fetch_usage(&agent, &dirs[i]) {
+                last_try[k] = now;
+                match fetch_usage(&agent, dir) {
                     Ok(windows) => {
-                        backoff[i] = 0;
-                        next[i] = now + POLL_MS;
-                        if tiers[i].is_none() || now - profile_at[i] > PROFILE_MS {
-                            if let Some(t) = fetch_tier(&agent, &dirs[i]) {
-                                tiers[i] = Some(t);
+                        backoff[k] = 0;
+                        next[k] = now + POLL_MS;
+                        if tiers[k].is_none() || now - profile_at[k] > PROFILE_MS {
+                            if let Some(t) = fetch_tier(&agent, dir) {
+                                tiers[k] = Some(t);
                             }
-                            profile_at[i] = now;
+                            profile_at[k] = now;
                         }
-                        cache_put(&mut cache, &dirs[i], now, tiers[i].as_deref(), &windows);
+                        // relire avant d'écrire : ne pas écraser les comptes d'une autre instance
+                        let mut cache = load_cache();
+                        cache_put(&mut cache, dir, now, tiers[k].as_deref(), &windows);
                         save_cache(&cache);
+                        seen_at[k] = now;
                         let _ = tx.send(QuotaResult {
-                            account: i,
+                            account: *ai,
                             windows,
-                            tier: tiers[i].clone(),
+                            tier: tiers[k].clone(),
                             error: None,
                             fetched_at_ms: now,
                             retry_at_ms: None,
                         });
                     }
                     Err(e) => {
-                        backoff[i] = e
+                        backoff[k] = e
                             .retry_after_ms
                             .filter(|ms| *ms > 0)
-                            .unwrap_or_else(|| (backoff[i] * 2).clamp(POLL_MS, BACKOFF_MAX_MS));
-                        next[i] = now + backoff[i];
+                            .unwrap_or_else(|| (backoff[k] * 2).clamp(POLL_MS, BACKOFF_MAX_MS));
+                        next[k] = now + backoff[k];
                         let _ = tx.send(QuotaResult {
-                            account: i,
+                            account: *ai,
                             windows: vec![],
-                            tier: tiers[i].clone(),
+                            tier: tiers[k].clone(),
                             error: Some(e.msg),
                             fetched_at_ms: 0,
-                            retry_at_ms: Some(next[i]),
+                            retry_at_ms: Some(next[k]),
                         });
                     }
                 }

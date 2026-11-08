@@ -46,17 +46,34 @@ impl Engine {
         }
         let refresh = Arc::new(AtomicBool::new(false));
         let (qtx, qrx) = mpsc::channel();
-        quota::spawn(
-            accounts.iter().map(|a| a.dir.clone()).collect(),
-            qtx,
-            refresh.clone(),
-        );
+        // --account : un seul compte affiché (et interrogé)
+        let locked = crate::profile::get().account.as_deref().and_then(|sel| {
+            let sel = sel.to_lowercase();
+            let found = accounts.iter().position(|a| {
+                a.label.to_lowercase().contains(&sel)
+                    || a.dir.file_name().map(|n| n.to_string_lossy().to_lowercase().contains(&sel)).unwrap_or(false)
+            });
+            if found.is_none() {
+                eprintln!("--account {sel} : {}", crate::i18n::t("aucun compte correspondant, tous les comptes sont affichés", "no matching account, showing all accounts"));
+            }
+            found
+        });
+        let targets = accounts
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| locked.map_or(true, |l| l == *i))
+            .map(|(i, a)| (i, a.dir.clone()))
+            .collect();
+        quota::spawn(targets, qtx, refresh.clone());
         let (wtx, wrx) = mpsc::channel::<notify::Result<notify::Event>>();
         let watcher = notify::recommended_watcher(move |res| {
             let _ = wtx.send(res);
         })
         .ok();
         let mut app = App::new(accounts, watcher, refresh);
+        // compte affiché : celui de --account, sinon le premier (Tab pour basculer)
+        app.account_locked = locked.is_some();
+        app.account_filter = locked.or(if app.accounts.len() > 1 { Some(0) } else { None });
         app.rescan_sessions();
         Some(Engine {
             app,
@@ -66,7 +83,7 @@ impl Engine {
             last_poll: Instant::now(),
             last_scan: Instant::now(),
             last_tray: None,
-            tray,
+            tray: tray && crate::profile::writes_tray(),
         })
     }
 

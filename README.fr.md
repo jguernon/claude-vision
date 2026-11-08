@@ -97,6 +97,25 @@ La touche `l` bascule et mémorise le choix.
 | `p` | pause du flux |
 | `r` | rafraîchir sessions et quotas |
 | `l` | basculer entre français et anglais |
+| `Tab` | changer de compte (chaque compte tour à tour, puis tous) |
+
+### Plusieurs comptes et instances
+
+Avec plusieurs comptes, la fenêtre montre un compte à la fois (ses sessions, ses agents, son
+flux et son quota) ; `Tab` passe au compte suivant, puis à tous les comptes.
+
+On peut aussi lancer une deuxième copie de l'app réservée à un compte, avec sa propre identité
+d'application (GNOME peut alors la placer sur son propre espace de travail) et sa couleur de
+bandeau :
+
+```bash
+claude-vision --instance work --account work --accent red
+packaging/install-instance.sh work work red    # ajoute le lanceur et l'icône « Claude Vision WORK »
+```
+
+`--account` garde le compte dont le libellé ou le dossier contient le texte donné. Les instances
+partagent le cache des quotas : en lancer plusieurs ne multiplie pas les appels à l'API. Seule
+l'instance principale publie les données de l'indicateur de la barre du haut.
 
 ## Lecture de l'écran
 
